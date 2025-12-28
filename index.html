@@ -76,7 +76,7 @@
 
 <script>
     // ⚠️ 請在此處替換為您的 Google Apps Script 部署網址
-    const API_URL = "https://script.google.com/macros/s/AKfycbxWprl15yvJzKuK7qM0sEV3s8FQQvSRCIX7-DoxzyxsHudSmUD9nYGYur5lRN7pYb67DQ/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbypYPCOJzjA08AWYfbWASB3tIXOOpiTTw_WcAzjg2XvCAEKC5J6k8yfGRRoMtxIDPqi/exec";
 
     function searchOrder() {
         const name = document.getElementById('nameInput').value.trim();
@@ -107,30 +107,28 @@
     }
 
     function showResult(data) {
-        // 1. 顯示概要資訊
         document.getElementById('summaryCard').style.display = 'block';
         document.getElementById('resBuyer').innerText = data.buyer;
         document.getElementById('resAmount').innerText = `$${data.totalAmount}`;
         
+        // 顯示付款狀態與顏色
         const statusEl = document.getElementById('resStatus');
         statusEl.innerText = data.paymentStatus;
-        
-        // 顏色區分
+        statusEl.className = 'status-badge'; // 重設
         if(data.paymentStatus === "完整付款") {
-            statusEl.style.backgroundColor = "#d9ead3";
-            statusEl.style.color = "#274e13";
+            statusEl.style.backgroundColor = "#d9ead3"; statusEl.style.color = "#274e13";
         } else if(data.paymentStatus === "未付款") {
-            statusEl.style.backgroundColor = "#f4cccc";
-            statusEl.style.color = "#990000";
-        } else {
-            statusEl.style.backgroundColor = "#eee";
-            statusEl.style.color = "#666";
+            statusEl.style.backgroundColor = "#f4cccc"; statusEl.style.color = "#990000";
         }
 
-        if(data.lastFive) {
-            document.getElementById('lastFiveRow').style.display = 'block';
-            document.getElementById('resLastFive').innerText = data.lastFive;
-        }
+        // --- 新增：實收金額、後五碼、備註 ---
+        let infoHtml = '';
+        if(data.lastFive) infoHtml += `<p><strong>回報後五碼：</strong> ${data.lastFive}</p>`;
+        if(data.receivedAmount > 0) infoHtml += `<p><strong>實收金額：</strong> <span style="color:green; font-weight:bold;">$${data.receivedAmount}</span></p>`;
+        if(data.note) infoHtml += `<p style="background:#fffbe6; padding:5px; border-radius:4px;"><strong>管理員備註：</strong> ${data.note}</p>`;
+        
+        // 您可以在 HTML 中預留一個 div 來放這些額外資訊
+        document.getElementById('extraInfo').innerHTML = infoHtml;
 
         // 2. 顯示品項列表
         const tbody = document.getElementById('itemsBody');
