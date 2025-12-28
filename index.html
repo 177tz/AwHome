@@ -3,41 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>代購訂單即時查詢系統</title>
+    <title>訂單與對帳即時查詢</title>
     <style>
         :root {
             --primary-color: #4a90e2;
-            --success-color: #274e13;
-            --pending-color: #990000;
+            --success-bg: #d9ead3;
+            --success-text: #274e13;
+            --danger-bg: #f4cccc;
+            --danger-text: #990000;
+            --note-bg: #fffbe6;
             --bg-color: #f5f7f9;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: var(--primary-color); margin-bottom: 25px; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 15px; color: #333; line-height: 1.5; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: var(--primary-color); margin-top: 0; }
         
-        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
-        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; outline: none; }
-        input:focus { border-color: var(--primary-color); }
-        button { padding: 12px 20px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; transition: 0.3s; }
-        button:hover { background: #357abd; }
+        .search-box { display: flex; gap: 8px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
+        button { padding: 12px 20px; background: var(--primary-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
 
-        .loading { text-align: center; display: none; color: #666; }
+        .loading { text-align: center; display: none; padding: 20px; color: #666; }
         
-        .summary-card { border-left: 5px solid var(--primary-color); background: #f0f7ff; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: none; }
-        .summary-card p { margin: 8px 0; font-size: 15px; }
-        .price { font-size: 20px; color: var(--pending-color); font-weight: bold; }
-        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: bold; }
+        /* 概要卡片區域 */
+        .summary-card { border: 1px solid #e1e4e8; background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+        .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+        .summary-row:last-child { border-bottom: none; }
+        .label { color: #666; font-weight: 500; }
+        .value { font-weight: bold; }
+        
+        .price-red { color: var(--danger-text); font-size: 1.1em; }
+        .price-green { color: var(--success-text); font-size: 1.1em; }
+        
+        .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 13px; }
+        .note-box { background: var(--note-bg); padding: 10px; border-radius: 6px; border-left: 4px solid #ffe58f; margin-top: 10px; font-size: 14px; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; display: none; font-size: 14px; }
-        th { background: #f8f9fa; text-align: left; padding: 12px; border-bottom: 2px solid #eee; }
-        td { padding: 12px; border-bottom: 1px solid #eee; }
-        .status-ok { color: var(--success-color); font-weight: bold; }
-        .status-warn { color: #f39c12; }
+        /* 明細表格 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; display: none; font-size: 14px; }
+        th { background: #f0f2f5; text-align: left; padding: 10px; border-bottom: 2px solid #ddd; }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        .status-tag { font-size: 12px; font-weight: bold; }
         
-        @media (max-width: 480px) {
-            .container { padding: 15px; }
-            .search-box { flex-direction: column; }
-        }
+        .error { color: var(--danger-text); text-align: center; margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -46,101 +52,130 @@
     <h2>📦 訂單查詢系統</h2>
     
     <div class="search-box">
-        <input type="text" id="nameInput" placeholder="請輸入您的訂購人姓名..." onkeypress="if(event.keyCode==13) searchOrder()">
+        <input type="text" id="nameInput" placeholder="請輸入訂購人姓名..." onkeypress="if(event.keyCode==13) searchOrder()">
         <button onclick="searchOrder()">查詢</button>
     </div>
 
-    <div id="loading" class="loading">🔍 正在連線後台系統，請稍候...</div>
+    <div id="loading" class="loading">⏳ 正在連線雲端資料庫...</div>
+    <div id="errorMsg" class="error"></div>
 
     <div id="summaryCard" class="summary-card">
-        <p><strong>訂購人：</strong> <span id="resBuyer"></span></p>
-        <p><strong>應付總額：</strong> <span id="resAmount" class="price"></span></p>
-        <p><strong>付款狀態：</strong> <span id="resStatus" class="status-badge"></span></p>
-        <p id="lastFiveRow" style="display:none;"><strong>回報後五碼：</strong> <span id="resLastFive"></span></p>
+        <div class="summary-row">
+            <span class="label">訂購人</span>
+            <span id="resBuyer" class="value"></span>
+        </div>
+        <div class="summary-row">
+            <span class="label">應付總額</span>
+            <span id="resAmount" class="value price-red"></span>
+        </div>
+        <div class="summary-row">
+            <span class="label">付款狀態</span>
+            <span id="resStatus" class="status-badge"></span>
+        </div>
+        <div id="lastFiveRow" class="summary-row" style="display:none;">
+            <span class="label">對帳後五碼</span>
+            <span id="resLastFive" class="value"></span>
+        </div>
+        <div id="receivedRow" class="summary-row" style="display:none;">
+            <span class="label">實收金額</span>
+            <span id="resReceived" class="value price-green"></span>
+        </div>
+        <div id="noteBox" class="note-box" style="display:none;">
+            <strong>管理員備註：</strong><br>
+            <span id="resNote"></span>
+        </div>
     </div>
 
     <table id="resultTable">
         <thead>
             <tr>
                 <th>品項</th>
-                <th>登記</th>
                 <th>配貨</th>
                 <th>狀態</th>
             </tr>
         </thead>
         <tbody id="itemsBody"></tbody>
     </table>
-
-    <div id="errorMsg" style="color:red; text-align:center; margin-top:20px;"></div>
 </div>
 
 <script>
-    // ⚠️ 請在此處替換為您的 Google Apps Script 部署網址
+    // ⚠️ 請更換為您的 Google Apps Script 網頁應用程式網址
     const API_URL = "https://script.google.com/macros/s/AKfycbyj0W7wtUr1IjZdfq5b3nxPyjpMumkanFuZxRJt_fcynFuQdm6DQt81grupVAF6ntlfYg/exec";
 
     function searchOrder() {
         const name = document.getElementById('nameInput').value.trim();
-        if (!name) return alert("請輸入姓名！");
+        if (!name) return;
 
-        // 重設介面
+        // 重置顯示內容
         document.getElementById('loading').style.display = 'block';
         document.getElementById('summaryCard').style.display = 'none';
         document.getElementById('resultTable').style.display = 'none';
+        document.getElementById('lastFiveRow').style.display = 'none';
+        document.getElementById('receivedRow').style.display = 'none';
+        document.getElementById('noteBox').style.display = 'none';
         document.getElementById('errorMsg').innerText = '';
 
         fetch(`${API_URL}?q=${encodeURIComponent(name)}`)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('loading').style.display = 'none';
-                
                 if (data.error) {
                     document.getElementById('errorMsg').innerText = data.error;
                 } else {
-                    showResult(data);
+                    renderUI(data);
                 }
             })
             .catch(err => {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('errorMsg').innerText = "系統繁忙或連線錯誤，請稍後再試。";
-                console.error(err);
+                document.getElementById('errorMsg').innerText = "系統連線失敗，請稍後再試。";
             });
     }
 
-    function showResult(data) {
+    function renderUI(data) {
+        // 1. 填入帳務資訊
         document.getElementById('summaryCard').style.display = 'block';
         document.getElementById('resBuyer').innerText = data.buyer;
         document.getElementById('resAmount').innerText = `$${data.totalAmount}`;
         
-        // 顯示付款狀態與顏色
+        // 付款狀態與顏色
         const statusEl = document.getElementById('resStatus');
         statusEl.innerText = data.paymentStatus;
-        statusEl.className = 'status-badge'; // 重設
         if(data.paymentStatus === "完整付款") {
             statusEl.style.backgroundColor = "#d9ead3"; statusEl.style.color = "#274e13";
-        } else if(data.paymentStatus === "未付款") {
+        } else {
             statusEl.style.backgroundColor = "#f4cccc"; statusEl.style.color = "#990000";
         }
 
-        // --- 新增：實收金額、後五碼、備註 ---
-        let infoHtml = '';
-        if(data.lastFive) infoHtml += `<p><strong>回報後五碼：</strong> ${data.lastFive}</p>`;
-        if(data.receivedAmount > 0) infoHtml += `<p><strong>實收金額：</strong> <span style="color:green; font-weight:bold;">$${data.receivedAmount}</span></p>`;
-        if(data.note) infoHtml += `<p style="background:#fffbe6; padding:5px; border-radius:4px;"><strong>管理員備註：</strong> ${data.note}</p>`;
-        
-        // 您可以在 HTML 中預留一個 div 來放這些額外資訊
-        document.getElementById('extraInfo').innerHTML = infoHtml;
+        // 後五碼
+        if(data.lastFive) {
+            document.getElementById('lastFiveRow').style.display = 'flex';
+            document.getElementById('resLastFive').innerText = data.lastFive;
+        }
 
-        // 2. 顯示品項列表
+        // 實收金額
+        if(data.receivedAmount > 0) {
+            document.getElementById('receivedRow').style.display = 'flex';
+            document.getElementById('resReceived').innerText = `$${data.receivedAmount}`;
+        }
+
+        // 備註
+        if(data.note) {
+            document.getElementById('noteBox').style.display = 'block';
+            document.getElementById('resNote').innerText = data.note;
+        }
+
+        // 2. 填入明細表格
         const tbody = document.getElementById('itemsBody');
         tbody.innerHTML = '';
         data.items.forEach(item => {
-            const row = `<tr>
-                <td>${item.product}</td>
-                <td>${item.demand}</td>
-                <td>${item.allocated}</td>
-                <td class="${item.status.includes('成功') ? 'status-ok' : 'status-warn'}">${item.status}</td>
-            </tr>`;
-            tbody.innerHTML += row;
+            const isSuccess = item.status.includes('成功');
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.product}</td>
+                    <td>${item.allocated} / ${item.demand}</td>
+                    <td class="status-tag" style="color:${isSuccess ? '#274e13' : '#e67e22'}">${item.status}</td>
+                </tr>
+            `;
         });
         document.getElementById('resultTable').style.display = 'table';
     }
