@@ -1,0 +1,58 @@
+/**
+ * 9. GitHub 查單網頁後端 API (最終優化版)
+ */
+function doGet(e) {
+  const searchText = e.parameter.q;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  if (!searchText || searchText.trim() === "") {
+    return createJsonResponse_({ error: "請輸入查詢名稱" });
+  }
+
+  const searchLower = searchText.toString().trim().toLowerCase();
+  const allocSheet = ss.getSheetByName("配貨");
+  const reconSheet = ss.getSheetByName("對帳表");
+
+  if (!allocSheet || !reconSheet) {
+    return createJsonResponse_({ error: "系統後台設定中，請稍後再試" });
+  }
+
+  try {
+    // 1. 抓取配貨明細
+    const allocData = allocSheet.getDataRange().getValues();
+    allocData.shift(); // 移除標題
+    const userOrders = allocData.filter(row => String(row[1]).trim().toLowerCase() === searchLower);
+
+    if (userOrders.length === 0) {
+      return createJsonResponse_({ error: "查無此人，請確認群內名稱是否輸入正確" });
+    }
+
+    // 2. 抓取對帳單總額與付款狀態
+    const reconData = reconSheet.getDataRange().getValues();
+    const userAccount = reconData.find(row => String(row[1]).trim().toLowerCase() === searchLower);
+
+    // 3. 整合回傳資料格式
+    const result = {
+      buyer: userAccount ? userAccount[1] : userOrders[0][1],
+      totalAmount: userAccount ? userAccount[3] : "計算中",
+      paymentStatus: userAccount ? userAccount[4] : "未核帳",
+      lastFive: userAccount ? userAccount[6] : "",
+      items: userOrders.map(row => ({
+        product: row[2],
+        demand: row[3],
+        allocated: row[4],
+        status: row[5]
+      }))
+    };
+
+    return createJsonResponse_(result);
+
+  } catch (err) {
+    return createJsonResponse_({ error: "伺服器忙碌中，請聯絡管理員" });
+  }
+}
+
+function createJsonResponse_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
