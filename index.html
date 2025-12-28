@@ -1,58 +1,152 @@
-/**
- * 9. GitHub 查單網頁後端 API (最終優化版)
- */
-function doGet(e) {
-  const searchText = e.parameter.q;
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  if (!searchText || searchText.trim() === "") {
-    return createJsonResponse_({ error: "請輸入查詢名稱" });
-  }
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代購訂單即時查詢系統</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #274e13;
+            --pending-color: #990000;
+            --bg-color: #f5f7f9;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: var(--primary-color); margin-bottom: 25px; }
+        
+        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; outline: none; }
+        input:focus { border-color: var(--primary-color); }
+        button { padding: 12px 20px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #357abd; }
 
-  const searchLower = searchText.toString().trim().toLowerCase();
-  const allocSheet = ss.getSheetByName("配貨");
-  const reconSheet = ss.getSheetByName("對帳表");
+        .loading { text-align: center; display: none; color: #666; }
+        
+        .summary-card { border-left: 5px solid var(--primary-color); background: #f0f7ff; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: none; }
+        .summary-card p { margin: 8px 0; font-size: 15px; }
+        .price { font-size: 20px; color: var(--pending-color); font-weight: bold; }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: bold; }
 
-  if (!allocSheet || !reconSheet) {
-    return createJsonResponse_({ error: "系統後台設定中，請稍後再試" });
-  }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; display: none; font-size: 14px; }
+        th { background: #f8f9fa; text-align: left; padding: 12px; border-bottom: 2px solid #eee; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        .status-ok { color: var(--success-color); font-weight: bold; }
+        .status-warn { color: #f39c12; }
+        
+        @media (max-width: 480px) {
+            .container { padding: 15px; }
+            .search-box { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
 
-  try {
-    // 1. 抓取配貨明細
-    const allocData = allocSheet.getDataRange().getValues();
-    allocData.shift(); // 移除標題
-    const userOrders = allocData.filter(row => String(row[1]).trim().toLowerCase() === searchLower);
+<div class="container">
+    <h2>📦 訂單查詢系統</h2>
+    
+    <div class="search-box">
+        <input type="text" id="nameInput" placeholder="請輸入您的訂購人姓名..." onkeypress="if(event.keyCode==13) searchOrder()">
+        <button onclick="searchOrder()">查詢</button>
+    </div>
 
-    if (userOrders.length === 0) {
-      return createJsonResponse_({ error: "查無此人，請確認群內名稱是否輸入正確" });
+    <div id="loading" class="loading">🔍 正在連線後台系統，請稍候...</div>
+
+    <div id="summaryCard" class="summary-card">
+        <p><strong>訂購人：</strong> <span id="resBuyer"></span></p>
+        <p><strong>應付總額：</strong> <span id="resAmount" class="price"></span></p>
+        <p><strong>付款狀態：</strong> <span id="resStatus" class="status-badge"></span></p>
+        <p id="lastFiveRow" style="display:none;"><strong>回報後五碼：</strong> <span id="resLastFive"></span></p>
+    </div>
+
+    <table id="resultTable">
+        <thead>
+            <tr>
+                <th>品項</th>
+                <th>登記</th>
+                <th>配貨</th>
+                <th>狀態</th>
+            </tr>
+        </thead>
+        <tbody id="itemsBody"></tbody>
+    </table>
+
+    <div id="errorMsg" style="color:red; text-align:center; margin-top:20px;"></div>
+</div>
+
+<script>
+    // ⚠️ 請在此處替換為您的 Google Apps Script 部署網址
+    const API_URL = "https://script.google.com/macros/s/AKfycbxWprl15yvJzKuK7qM0sEV3s8FQQvSRCIX7-DoxzyxsHudSmUD9nYGYur5lRN7pYb67DQ/exec";
+
+    function searchOrder() {
+        const name = document.getElementById('nameInput').value.trim();
+        if (!name) return alert("請輸入姓名！");
+
+        // 重設介面
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('summaryCard').style.display = 'none';
+        document.getElementById('resultTable').style.display = 'none';
+        document.getElementById('errorMsg').innerText = '';
+
+        fetch(`${API_URL}?q=${encodeURIComponent(name)}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.error) {
+                    document.getElementById('errorMsg').innerText = data.error;
+                } else {
+                    showResult(data);
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorMsg').innerText = "系統繁忙或連線錯誤，請稍後再試。";
+                console.error(err);
+            });
     }
 
-    // 2. 抓取對帳單總額與付款狀態
-    const reconData = reconSheet.getDataRange().getValues();
-    const userAccount = reconData.find(row => String(row[1]).trim().toLowerCase() === searchLower);
+    function showResult(data) {
+        // 1. 顯示概要資訊
+        document.getElementById('summaryCard').style.display = 'block';
+        document.getElementById('resBuyer').innerText = data.buyer;
+        document.getElementById('resAmount').innerText = `$${data.totalAmount}`;
+        
+        const statusEl = document.getElementById('resStatus');
+        statusEl.innerText = data.paymentStatus;
+        
+        // 顏色區分
+        if(data.paymentStatus === "完整付款") {
+            statusEl.style.backgroundColor = "#d9ead3";
+            statusEl.style.color = "#274e13";
+        } else if(data.paymentStatus === "未付款") {
+            statusEl.style.backgroundColor = "#f4cccc";
+            statusEl.style.color = "#990000";
+        } else {
+            statusEl.style.backgroundColor = "#eee";
+            statusEl.style.color = "#666";
+        }
 
-    // 3. 整合回傳資料格式
-    const result = {
-      buyer: userAccount ? userAccount[1] : userOrders[0][1],
-      totalAmount: userAccount ? userAccount[3] : "計算中",
-      paymentStatus: userAccount ? userAccount[4] : "未核帳",
-      lastFive: userAccount ? userAccount[6] : "",
-      items: userOrders.map(row => ({
-        product: row[2],
-        demand: row[3],
-        allocated: row[4],
-        status: row[5]
-      }))
-    };
+        if(data.lastFive) {
+            document.getElementById('lastFiveRow').style.display = 'block';
+            document.getElementById('resLastFive').innerText = data.lastFive;
+        }
 
-    return createJsonResponse_(result);
+        // 2. 顯示品項列表
+        const tbody = document.getElementById('itemsBody');
+        tbody.innerHTML = '';
+        data.items.forEach(item => {
+            const row = `<tr>
+                <td>${item.product}</td>
+                <td>${item.demand}</td>
+                <td>${item.allocated}</td>
+                <td class="${item.status.includes('成功') ? 'status-ok' : 'status-warn'}">${item.status}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+        document.getElementById('resultTable').style.display = 'table';
+    }
+</script>
 
-  } catch (err) {
-    return createJsonResponse_({ error: "伺服器忙碌中，請聯絡管理員" });
-  }
-}
-
-function createJsonResponse_(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+</body>
+</html>
