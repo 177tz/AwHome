@@ -106,23 +106,26 @@
         const name = document.getElementById('nameInput').value.trim();
         if (!name) return;
 
-        // 重置顯示內容
+        // 💡 關鍵修正：徹底清空舊資料，避免殘留
         document.getElementById('loading').style.display = 'block';
         document.getElementById('summaryCard').style.display = 'none';
         document.getElementById('resultTable').style.display = 'none';
         document.getElementById('errorMsg').innerText = '';
+        
+        // 清空內層文字與表格內容
+        document.getElementById('resBuyer').innerText = '';
+        document.getElementById('resAmount').innerText = '';
+        document.getElementById('resStatus').innerText = '';
+        document.getElementById('lastFiveRow').style.display = 'none';
+        document.getElementById('receivedRow').style.display = 'none';
+        document.getElementById('noteBox').style.display = 'none';
+        document.getElementById('itemsBody').innerHTML = ''; // 清空配貨清單
 
-        // 💡 關鍵修正：加入 redirect: "follow"
         fetch(`${API_URL}?q=${encodeURIComponent(name)}`, {
             method: "GET",
-            mode: "cors",      // 確保跨網域存取
-            redirect: "follow" // 告訴瀏覽器跟隨 Google 的跳轉
+            redirect: "follow"
         })
-        .then(response => {
-            // 先確認 response 是否正常
-            if (!response.ok) throw new Error('網路回應不正常');
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
             document.getElementById('loading').style.display = 'none';
             if (data.error) {
@@ -133,9 +136,7 @@
         })
         .catch(err => {
             document.getElementById('loading').style.display = 'none';
-            // 在 Console 印出具體錯誤方便後續排查
-            console.error("Fetch Error:", err);
-            document.getElementById('errorMsg').innerText = "系統連線失敗，請檢查 API 部署網址或稍後再試。";
+            document.getElementById('errorMsg').innerText = "系統連線失敗。";
         });
     }
 
